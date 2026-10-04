@@ -1,0 +1,127 @@
+version: "3.9"
+
+# ============================================================
+# EdgeOps AI — Docker Compose
+# ============================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: edgeops-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-edgeops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-edgeops_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-edgeops}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-edgeops}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - edgeops-net
+
+  # ──────────────────────────────────────────────────────────
+  # Ollama LLM Service
+  # ──────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: edgeops-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - edgeops-net
+    # Uncomment if you have GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ──────────────────────────────────────────────────────────
+  # Cloud Backend (FastAPI)
+  # ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: edgeops-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-edgeops}:${POSTGRES_PASSWORD:-edgeops_secret}@postgres:5432/${POSTGRES_DB:-edgeops}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      CLOUD_API_KEY: ${CLOUD_API_KEY:-dev-secret-key-change-in-prod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - edgeops-net
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────
+  # Streamlit Dashboard
+  # ──────────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: edgeops-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      CLOUD_API_URL: http://backend:8000
+      CLOUD_API_KEY: ${CLOUD_API_KEY:-dev-secret-key-change-in-prod}
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      - backend
+    networks:
+      - edgeops-net
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────
+  # Edge Node Simulator
+  # ──────────────────────────────────────────────────────────
+  edge-simulator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.edge
+    container_name: edgeops-edge
+    environment:
+      CLOUD_API_URL: http://backend:8000
+      CLOUD_API_KEY: ${CLOUD_API_KEY:-dev-secret-key-change-in-prod}
+      NUM_EDGE_NODES: ${NUM_EDGE_NODES:-5}
+      EDGE_SEND_INTERVAL: ${EDGE_SEND_INTERVAL:-5}
+      EDGE_CONTAMINATION: ${EDGE_CONTAMINATION:-0.05}
+      EDGE_TRAINING_SAMPLES: ${EDGE_TRAINING_SAMPLES:-200}
+    depends_on:
+      - backend
+    networks:
+      - edgeops-net
+    restart: unless-stopped
+
+# ──────────────────────────────────────────────────────────
+# Volumes & Networks
+# ──────────────────────────────────────────────────────────
+
+volumes:
+  postgres_data:
+  ollama_data:
+
+networks:
+  edgeops-net:
+    driver: bridge

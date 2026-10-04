@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Secrets & environment variables
+.env
+cloud_backend/.env
+
+# Database
+*.db
+*.sqlite3
+
+# ML models (large binaries — keep only .gitkeep)
+edge_node/models/*.pkl
+edge_node/models/*.joblib
+!edge_node/models/.gitkeep
+
+# Experiment results
+experiments/results/*
+!experiments/results/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
