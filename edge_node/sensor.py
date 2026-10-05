@@ -58,7 +58,7 @@ class SensorReading:
             "disk_io": round(self.disk_io, 2),
             "error_rate": round(self.error_rate, 4),
             "latency_ms": round(self.latency_ms, 2),
-            "anomaly_type": self.anomaly_type.value,
+            "anomaly_type": getattr(self.anomaly_type, "value", str(self.anomaly_type)),
             "is_anomaly": self.is_anomaly,
         }
 
@@ -117,7 +117,8 @@ class SensorSimulator:
     # ------------------------------------------------------------------
     def _inject_anomaly(self, base: np.ndarray) -> tuple[np.ndarray, AnomalyType]:
         """Choose and apply a random anomaly pattern."""
-        atype = self._rng.choice(list(AnomalyType)[:-1])  # exclude NONE
+        candidates = [t for t in AnomalyType if t != AnomalyType.NONE]
+        atype = candidates[int(self._rng.integers(0, len(candidates)))]
 
         if atype == AnomalyType.SPIKE:
             # Sudden spike on CPU, temp and error_rate

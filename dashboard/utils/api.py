@@ -5,10 +5,15 @@ Shared API client and utilities.
 import os
 import requests
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 import streamlit as st
+from dotenv import load_dotenv
 
-CLOUD_API_URL = os.getenv("CLOUD_API_URL", "http://localhost:8000")
+# Load dashboard-specific .env
+load_dotenv(Path(__file__).parent.parent / ".env")
+
+CLOUD_API_URL = os.getenv("CLOUD_API_URL", "http://127.0.0.1:8000")
 API_KEY = os.getenv("CLOUD_API_KEY", "dev-secret-key-change-in-prod")
 
 HEADERS = {"X-API-Key": API_KEY}
@@ -69,11 +74,11 @@ def api_patch(path: str, json: dict) -> Optional[dict]:
 
 
 def fmt_score(score: float) -> str:
-    if score >= 0.85:
+    if score >= 0.75:
         return f"🔴 {score:.3f}"
-    elif score >= 0.70:
+    elif score >= 0.55:
         return f"🟠 {score:.3f}"
-    elif score >= 0.50:
+    elif score >= 0.35:
         return f"🟡 {score:.3f}"
     else:
         return f"🟢 {score:.3f}"

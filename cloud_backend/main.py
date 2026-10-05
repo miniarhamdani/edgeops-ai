@@ -395,7 +395,7 @@ def system_stats(db: Session = Depends(get_db)):
 @app.get("/api/analytics/timeline", tags=["analytics"])
 def anomaly_timeline(
     hours: int = Query(24, ge=1, le=168),
-    bucket_minutes: int = Query(60, ge=5, le=1440),
+    bucket_minutes: int = Query(5, ge=1, le=1440),
     device_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -416,10 +416,17 @@ def anomaly_timeline(
     # Bucket into time slots
     buckets: dict = {}
     for ev in events:
-        slot = ev.received_at.replace(
-            minute=(ev.received_at.minute // bucket_minutes) * bucket_minutes,
-            second=0, microsecond=0,
-        )
+        if bucket_minutes < 60:
+            slot = ev.received_at.replace(
+                minute=(ev.received_at.minute // bucket_minutes) * bucket_minutes,
+                second=0, microsecond=0,
+            )
+        else:
+            b_hours = max(1, bucket_minutes // 60)
+            slot = ev.received_at.replace(
+                hour=(ev.received_at.hour // b_hours) * b_hours,
+                minute=0, second=0, microsecond=0,
+            )
         key = slot.isoformat()
         if key not in buckets:
             buckets[key] = {"timestamp": key, "count": 0, "avg_score": 0.0, "scores": []}

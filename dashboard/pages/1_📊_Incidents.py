@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "utils"))
 
 import streamlit as st
 import pandas as pd
+# pyrefly: ignore [missing-import]
 from api import api_get, api_patch, api_post, SEVERITY_COLORS, STATUS_COLORS
 
 st.set_page_config(page_title="Incidents — EdgeOps AI", page_icon="🚨", layout="wide")

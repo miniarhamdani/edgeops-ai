@@ -116,12 +116,23 @@ class EdgeAnomalyDetector:
     # ------------------------------------------------------------------
     # Detection
     # ------------------------------------------------------------------
-    def _score_to_confidence(self, score: float) -> float:
-        """Convert raw IF score to a 0–1 confidence value."""
-        # IsolationForest scores are typically in [-0.5, 0.5]
-        # Negative scores are anomalies; more negative = more anomalous
-        normalized = np.clip(-score, 0, 1)
-        return float(normalized)
+    def _score_to_normalized(self, score: float, is_anomaly: bool) -> tuple[float, float]:
+        """
+        Convert raw Isolation Forest decision score into:
+        1. normalized_score (0.0 to 1.0, higher = more anomalous)
+        2. confidence (0.5 to 0.99, certainty of classification)
+
+        In scikit-learn IsolationForest, score is decision_function(X).
+        Anomalies have score < 0, typically ranging from 0.0 down to -0.15.
+        """
+        if is_anomaly or score < 0:
+            # Map [-0.15, 0.0] gracefully into [1.0, 0.15]
+            normalized = float(np.clip((-score) / 0.15, 0.15, 1.0))
+            confidence = float(np.clip(0.60 + 0.38 * normalized, 0.60, 0.99))
+        else:
+            normalized = float(np.clip(max(0.0, 0.08 - score), 0.0, 0.15))
+            confidence = float(np.clip(0.70 + min(score / 0.15, 0.28), 0.70, 0.99))
+        return normalized, confidence
 
     def process(self, reading: SensorReading) -> Optional[AnomalyResult]:
         """
@@ -156,8 +167,7 @@ class EdgeAnomalyDetector:
         score = float(self._pipeline.decision_function(X_sample)[0])
         prediction = int(self._pipeline.predict(X_sample)[0])
         is_anomaly = (prediction == -1)
-        normalized = self._score_to_confidence(score)
-        confidence = normalized if is_anomaly else 1 - normalized
+        normalized, confidence = self._score_to_normalized(score, is_anomaly)
 
         if is_anomaly:
             self._total_anomalies += 1

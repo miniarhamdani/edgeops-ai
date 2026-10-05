@@ -141,7 +141,7 @@ def render_kpi_cards(stats: dict):
 
 def render_timeline_chart():
     st.markdown("### 📈 Anomaly Timeline (Last 24h)")
-    timeline = api_get("/api/analytics/timeline", params={"hours": 24, "bucket_minutes": 60})
+    timeline = api_get("/api/analytics/timeline", params={"hours": 24, "bucket_minutes": 5})
     if not timeline:
         st.info("No timeline data available yet.")
         return
@@ -160,18 +160,29 @@ def render_timeline_chart():
         name="Anomaly Count",
         marker=dict(
             color=df["avg_score"],
-            colorscale=[[0, "#10B981"], [0.5, "#F59E0B"], [1, "#FF2D55"]],
+            colorscale=[[0, "#10B981"], [0.35, "#F59E0B"], [0.75, "#FF2D55"]],
             colorbar=dict(title="Avg Score", thickness=12),
         ),
-        hovertemplate="<b>%{x}</b><br>Count: %{y}<br>Avg Score: %{marker.color:.3f}<extra></extra>",
+        hovertemplate="<b>%{x|%H:%M}</b><br>Count: %{y}<br>Avg Score: %{marker.color:.3f}<extra></extra>",
     ))
+
+    xaxis_layout = dict(
+        gridcolor="rgba(99,102,241,0.1)",
+        showgrid=True,
+        tickformat="%H:%M",
+        type="date",
+    )
+    if len(df) == 1:
+        # Prevent microsecond zoom on a single data bucket
+        t0 = df["timestamp"].iloc[0]
+        xaxis_layout["range"] = [t0 - pd.Timedelta(minutes=30), t0 + pd.Timedelta(minutes=30)]
 
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(20,24,41,0.8)",
         font=dict(color="#94A3B8", family="Inter"),
         margin=dict(l=10, r=10, t=10, b=10),
-        xaxis=dict(gridcolor="rgba(99,102,241,0.1)", showgrid=True),
+        xaxis=xaxis_layout,
         yaxis=dict(gridcolor="rgba(99,102,241,0.1)", showgrid=True, title="Anomaly Count"),
         height=300,
     )
@@ -235,7 +246,13 @@ def render_comm_reduction(stats: dict):
         title={"text": "Communication Reduction %", "font": {"color": "#94A3B8", "family": "Inter"}},
         number={"suffix": "%", "font": {"color": "#6366F1", "size": 40}},
         gauge={
-            "axis": {"range": [0, 100], "tickcolor": "#475569"},
+            "axis": {
+                "range": [0, 100],
+                "tickvals": [0, 20, 40, 60, 80, 100],
+                "ticktext": ["0%", "20%", "40%", "60%", "80%", "100%"],
+                "tickcolor": "#475569",
+                "tickfont": {"size": 11, "color": "#94A3B8"},
+            },
             "bar": {"color": "#6366F1"},
             "steps": [
                 {"range": [0, 50], "color": "rgba(239,68,68,0.15)"},

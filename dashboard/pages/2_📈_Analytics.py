@@ -75,9 +75,9 @@ with col_a:
         name="Score",
         hovertemplate="Score: %{x:.3f}<br>Count: %{y}<extra></extra>",
     ))
-    fig.add_vline(x=0.5, line_dash="dash", line_color="#F59E0B", annotation_text="Medium threshold")
-    fig.add_vline(x=0.7, line_dash="dash", line_color="#FF6B35", annotation_text="High threshold")
-    fig.add_vline(x=0.85, line_dash="dash", line_color="#FF2D55", annotation_text="Critical threshold")
+    fig.add_vline(x=0.35, line_dash="dash", line_color="#F59E0B", annotation_text="Medium (0.35)")
+    fig.add_vline(x=0.55, line_dash="dash", line_color="#FF6B35", annotation_text="High (0.55)")
+    fig.add_vline(x=0.75, line_dash="dash", line_color="#FF2D55", annotation_text="Critical (0.75)")
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(20,24,41,0.8)",
         font=dict(color="#94A3B8", family="Inter"),

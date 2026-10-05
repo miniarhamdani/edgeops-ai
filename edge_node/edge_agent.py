@@ -82,10 +82,13 @@ class EdgeAgent:
             resp = await client.post("/api/events", json=payload)
             if resp.status_code in (200, 201):
                 self._anomalies_forwarded += 1
+                anomaly_type_name = getattr(
+                    result.reading.anomaly_type, "value", str(result.reading.anomaly_type)
+                )
                 logger.success(
                     f"[{self.device_id}] ✓ Anomaly forwarded "
                     f"(score={result.normalized_score:.3f}, "
-                    f"type={result.reading.anomaly_type.value})"
+                    f"type={anomaly_type_name})"
                 )
                 return True
             else:

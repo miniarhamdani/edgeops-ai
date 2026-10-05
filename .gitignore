@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
 *.so
@@ -15,28 +16,38 @@ venv/
 .venv/
 env/
 ENV/
+*.env.local
 
 # Secrets & environment variables
 .env
+.env.*
+!.env.example
 cloud_backend/.env
+dashboard/.env
 
 # Database
 *.db
+*.sqlite
 *.sqlite3
 
-# ML models (large binaries — keep only .gitkeep)
-edge_node/models/*.pkl
-edge_node/models/*.joblib
+# ML models & artifacts
+*.pkl
+*.joblib
+models/
+edge_node/models/*
 !edge_node/models/.gitkeep
 
 # Experiment results
 experiments/results/*
 !experiments/results/.gitkeep
 
-# IDE
+# Testing & caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE & OS
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db

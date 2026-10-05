@@ -20,10 +20,10 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 # Severity thresholds
 SEVERITY_THRESHOLDS = {
-    "low": 0.3,
-    "medium": 0.5,
-    "high": 0.7,
-    "critical": 0.85,
+    "low": 0.20,
+    "medium": 0.35,
+    "high": 0.55,
+    "critical": 0.75,
 }
 
 
@@ -40,35 +40,59 @@ def score_to_severity(score: float) -> str:
 
 
 def build_prompt(event: dict) -> str:
-    """Build a structured prompt for anomaly explanation."""
+    """Build a structured prompt for anomaly explanation with strict context constraints."""
     severity = score_to_severity(event.get("normalized_score", 0))
-    anomaly_type = event.get("anomaly_type", "unknown")
+    raw_type = (event.get("anomaly_type") or "unknown").lower()
+    anomaly_type = "statistical deviation" if raw_type in ("none", "unknown", "") else raw_type
 
-    return f"""You are an expert DevOps/SRE engineer analyzing IoT edge device telemetry.
-An anomaly has been detected on device '{event.get("device_id", "unknown")}' at {datetime.fromtimestamp(event.get("timestamp", 0)).strftime('%Y-%m-%d %H:%M:%S')}.
+    # Identify primary outliers to ground the LLM
+    deviations = []
+    if event.get("cpu_usage", 0) > 75:
+        deviations.append(f"CPU at {event['cpu_usage']:.1f}%")
+    if event.get("memory_usage", 0) > 75:
+        deviations.append(f"Memory at {event['memory_usage']:.1f}%")
+    if event.get("temperature", 0) > 70:
+        deviations.append(f"Temperature at {event['temperature']:.1f}°C")
+    if event.get("error_rate", 0) > 0.05:
+        deviations.append(f"Error rate at {event['error_rate']:.2%}")
+    if event.get("latency_ms", 0) > 150:
+        deviations.append(f"Latency at {event['latency_ms']:.1f}ms")
+    if event.get("network_in", 0) < 1.0 and event.get("network_out", 0) < 1.0:
+        deviations.append("Network traffic dropped to near zero")
 
-ANOMALY DETAILS:
-- Type: {anomaly_type.upper()}
-- Severity: {severity.upper()}
-- Anomaly Score: {event.get("normalized_score", 0):.3f} (0=normal, 1=extreme)
-- Confidence: {event.get("confidence", 0):.1%}
+    deviations_str = ", ".join(deviations) if deviations else "multi-metric correlation shift"
 
-SENSOR READINGS:
+    return f"""You are a senior Edge SRE engineer analyzing IoT gateway telemetry.
+An anomaly was detected on node '{event.get("device_id", "unknown")}' at {datetime.fromtimestamp(event.get("timestamp", 0)).strftime('%Y-%m-%d %H:%M:%S')}.
+
+ANOMALY PROFILE:
+- Classified Pattern: {anomaly_type.upper()}
+- Assessed Severity: {severity.upper()}
+- Anomaly Score: {event.get("normalized_score", 0):.3f} (0=baseline, 1=extreme outlier)
+- Isolation Forest Confidence: {event.get("confidence", 0):.1%}
+- Key Outliers Identified: {deviations_str}
+
+LIVE SENSOR READINGS:
 - CPU Usage: {event.get("cpu_usage", 0):.1f}%
 - Memory Usage: {event.get("memory_usage", 0):.1f}%
 - Temperature: {event.get("temperature", 0):.1f}°C
-- Network IN: {event.get("network_in", 0):.2f} KB/s
-- Network OUT: {event.get("network_out", 0):.2f} KB/s
+- Network IN / OUT: {event.get("network_in", 0):.2f} / {event.get("network_out", 0):.2f} KB/s
 - Disk I/O: {event.get("disk_io", 0):.2f} MB/s
 - Error Rate: {event.get("error_rate", 0):.2%}
-- Latency: {event.get("latency_ms", 0):.1f} ms
+- Response Latency: {event.get("latency_ms", 0):.1f} ms
 
-Respond with a JSON object only (no markdown), with these fields:
+CRITICAL GUIDELINES:
+1. Base your explanation strictly on the specific sensor numbers above ({deviations_str}).
+2. DO NOT use vague generic phrases like "temporary spike", "routine maintenance", or "software update".
+3. Provide a concrete technical hypothesis (e.g., thread starvation, memory leak accumulation, thermal throttling, packet drop on cellular backhaul, sensor freeze).
+4. Provide 2-3 precise, actionable remediation commands or steps.
+
+Respond with a JSON object only (no markdown wrapping, no comments):
 {{
-  "explanation": "<2-3 sentence technical explanation of what caused this anomaly>",
-  "recommended_action": "<specific, actionable remediation steps>",
+  "explanation": "<concise 2-3 sentence technical analysis citing the exact anomalous numbers>",
+  "recommended_action": "<concrete diagnostic and mitigation steps for an edge node>",
   "severity": "{severity}",
-  "root_cause_hypothesis": "<most likely root cause>",
+  "root_cause_hypothesis": "<precise root cause tied to the metrics>",
   "urgency": "<immediate|within_1h|within_24h|monitor>"
 }}"""
 
@@ -174,6 +198,9 @@ class LLMService:
                      f"This pattern often indicates a memory leak, disk filling up, or thermal throttling.",
             "freeze": f"A sensor freeze anomaly was detected — readings are static, suggesting "
                       f"sensor malfunction, process hang, or data pipeline issue.",
+            "statistical_deviation": f"A multi-metric statistical deviation was detected with {issue_str}. "
+                                     f"Telemetry points lie significantly outside the normal feature distribution.",
+            "none": f"A subtle statistical outlier was detected by the Isolation Forest ({issue_str}).",
         }
 
         actions = {
@@ -185,6 +212,9 @@ class LLMService:
                      "3. Monitor for thermal throttling. 4. Schedule maintenance window.",
             "freeze": "1. Verify sensor/agent is responsive. 2. Restart monitoring agent. "
                       "3. Check data pipeline health. 4. Run hardware diagnostics.",
+            "statistical_deviation": "1. Inspect joint metric distribution. 2. Monitor for recurrence. "
+                                     "3. Verify sensor calibration and edge node clock sync.",
+            "none": "1. Check baseline telemetry. 2. Monitor next readings to confirm transient fluctuation.",
         }
 
         return {

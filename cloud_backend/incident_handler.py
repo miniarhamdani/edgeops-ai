@@ -37,14 +37,18 @@ def upsert_incident(db: Session, event: models.AnomalyEvent) -> models.Incident:
 
     severity = _compute_severity(event.normalized_score)
 
+    # Determine human-friendly anomaly pattern name
+    raw_type = (event.anomaly_type or "unclassified").lower()
+    type_display = "statistical_deviation" if raw_type in ("none", "unknown", "") else raw_type
+
     if incident is None:
         # Create new incident
         incident = models.Incident(
             device_id=event.device_id,
             severity=severity,
-            title=f"Anomaly detected on {event.device_id} [{event.anomaly_type}]",
+            title=f"Anomaly detected on {event.device_id} [{type_display}]",
             summary=(
-                f"First anomaly: {event.anomaly_type} pattern detected at "
+                f"First anomaly: {type_display} pattern detected at "
                 f"{datetime.fromtimestamp(event.timestamp).strftime('%H:%M:%S')}. "
                 f"Score: {event.normalized_score:.3f}."
             ),
@@ -59,6 +63,13 @@ def upsert_incident(db: Session, event: models.AnomalyEvent) -> models.Incident:
         # Update existing incident
         incident.anomaly_count += 1
         incident.updated_at = datetime.utcnow()
+
+        # Update title if current title was unclassified/none and we now have a specific type
+        if type_display != "statistical_deviation" and any(
+            marker in incident.title for marker in ["[none]", "[statistical_deviation]", "[unclassified]"]
+        ):
+            incident.title = f"Anomaly detected on {event.device_id} [{type_display}]"
+            logger.info(f"Incident #{incident.id} title updated to dominant type [{type_display}]")
 
         # Update running average
         old_total = (incident.avg_score or 0) * (incident.anomaly_count - 1)
@@ -104,11 +115,11 @@ def auto_resolve_stale_incidents(db: Session, stale_minutes: int = 60) -> int:
 
 
 def _compute_severity(score: float) -> str:
-    if score >= 0.85:
+    if score >= 0.75:
         return "critical"
-    elif score >= 0.70:
+    elif score >= 0.55:
         return "high"
-    elif score >= 0.50:
+    elif score >= 0.35:
         return "medium"
     else:
         return "low"
